@@ -170,6 +170,26 @@ class SettingView extends GetView<SettingController> {
       );
     });
 
+    // New: Notify when download completes
+    final buildNotifyDownloadComplete = _buildConfigItem('notifyDownloadComplete', () {
+      return appController.downloaderConfig.value.extra.notifyDownloadComplete
+          ? 'on'.tr
+          : 'off'.tr;
+    }, (Key key) {
+      return Container(
+        alignment: Alignment.centerLeft,
+        child: Switch(
+          value: appController.downloaderConfig.value.extra.notifyDownloadComplete,
+          onChanged: (bool value) async {
+            appController.downloaderConfig.update((val) {
+              val!.extra.notifyDownloadComplete = value;
+            });
+            await debounceSave();
+          },
+        ),
+      );
+    });
+
     // AutoTorrent: Enable auto create BT tasks from .torrent files
     final buildAutoTorrentEnable = _buildConfigItem('autoTorrentEnable', () {
       return appController.downloaderConfig.value.autoTorrent.enable
@@ -1495,6 +1515,7 @@ class SettingView extends GetView<SettingController> {
                             buildMaxRunning(),
                             buildDefaultDirectDownload(),
                             buildAutoStartTasks(),
+                            buildNotifyDownloadComplete(),
                             buildAutoTorrentEnable(),
                             Obx(() => Visibility(
                                   visible: appController.downloaderConfig.value

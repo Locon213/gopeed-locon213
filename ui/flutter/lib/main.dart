@@ -14,6 +14,7 @@ import 'app/modules/app/views/app_view.dart';
 import 'core/libgopeed_boot.dart';
 import 'database/database.dart';
 import 'i18n/message.dart';
+import 'services/notification_service.dart';
 import 'util/browser_extension_host/browser_extension_host.dart';
 import 'util/locale_manager.dart';
 import 'util/log_util.dart';
@@ -133,6 +134,9 @@ Future<void> init(Args args) async {
   } catch (e) {
     logger.e("load config fail", e);
   }
+
+  // Initialize notification service
+  await NotificationService().initialize();
 
   // Auto-start incomplete tasks if enabled
   if (controller.downloaderConfig.value.extra.autoStartTasks) {

@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 
 import '../../../../api/api.dart';
 import '../../../../api/model/task.dart';
+import '../../../../services/notification_service.dart';
 
 abstract class TaskListController extends GetxController {
   List<Status> statuses;
@@ -45,9 +46,13 @@ abstract class TaskListController extends GetxController {
   }
 
   getTasksState() async {
-    final tasks = await getTasks(statuses);
+    final newTasks = await getTasks(statuses);
     // sort tasks by create time
-    tasks.sort(compare);
-    this.tasks.value = tasks;
+    newTasks.sort(compare);
+
+    // Check for task status changes and send notifications if needed
+    await NotificationService().monitorTaskChanges(newTasks);
+
+    this.tasks.value = newTasks;
   }
 }

@@ -177,5 +177,10 @@ const enUS = {
     'githubMirrorType': 'Mirror Type',
     'githubMirrorUrl': 'Mirror URL',
     'githubMirrorUrlHint': 'Enter mirror URL',
+    'notifyDownloadComplete': 'Notify when download completes',
+    'downloadCompleteTitle': 'Download Completed',
+    'downloadCompleteBody': 'File "@fileName" (@fileSize) has been downloaded successfully',
+    'downloadFailedTitle': 'Download Failed',
+    'downloadFailedBody': 'File "@fileName" failed to download: @error',
   },
 };

@@ -173,5 +173,10 @@ const zhCN = {
     'githubMirrorType': '镜像类型',
     'githubMirrorUrl': '镜像地址',
     'githubMirrorUrlHint': '请输入镜像地址',
+    'notifyDownloadComplete': '下载完成时通知',
+    'downloadCompleteTitle': '下载完成',
+    'downloadCompleteBody': '文件 "@fileName" (@fileSize) 已成功下载',
+    'downloadFailedTitle': '下载失败',
+    'downloadFailedBody': '文件 "@fileName" 下载失败: @error',
   }
 };
