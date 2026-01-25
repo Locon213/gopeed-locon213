@@ -13,6 +13,7 @@ on:
         default: "false"
 
 env:
+  VERSION: "1.9.1"  # Жестко заданная версия
   GO_VERSION: "1.24"
   FLUTTER_VERSION: "3.38.7"
   GA4_MEASUREMENT_ID: ${{ secrets.GA4_MEASUREMENT_ID }}
@@ -22,21 +23,8 @@ permissions:
   contents: write
 
 jobs:
-  get-release:
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.get-release.outputs.version }}
-      upload_url: ${{ steps.get-release.outputs.upload_url }}
-
-    steps:
-      - uses: monkeyWie/get-latest-release@v2.1
-        id: get-release
-        with:
-          myToken: ${{ github.token }}
-
   build-windows:
     if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'windows' }}
-    needs: [get-release]
     strategy:
       fail-fast: false
       matrix:
@@ -88,7 +76,7 @@ jobs:
           flutter-version: ${{ matrix.flutter_version || env.FLUTTER_VERSION }}
       - name: Build
         env:
-          VERSION: ${{ needs.get-release.outputs.version }}
+          VERSION: ${{ env.VERSION }}
           GOARCH: ${{ matrix.arch }}
         run: |
           Invoke-WebRequest -Uri "https://github.com/jrsoftware/issrc/raw/main/Files/Languages/Unofficial/ChineseSimplified.isl" -OutFile "ChineseSimplified.isl"
@@ -183,16 +171,15 @@ jobs:
           iscc.exe setup.iss
           mv "Output\gopeed.exe" "Output\Gopeed-$TAG-windows-${{ matrix.arch }}.exe"
           Compress-Archive -Path "Output\Gopeed-$TAG-windows-${{ matrix.arch }}.exe" -DestinationPath "Output\Gopeed-$TAG-windows-${{ matrix.arch }}.zip"
-      - name: Upload
-        uses: shogo82148/actions-upload-release-asset@v1
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          upload_url: ${{ needs.get-release.outputs.upload_url }}
-          asset_path: ui/flutter/build/windows/Output/*
-          overwrite: true
+          name: windows-${{ matrix.arch }}
+          path: ui/flutter/build/windows/Output/*
+
   build-macos-amd64-lib:
     if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'macos' }}
     runs-on: macos-15-intel
-    needs: [get-release]
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v4
@@ -200,7 +187,7 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
       - name: Build
         env:
-          VERSION: ${{ needs.get-release.outputs.version }}
+          VERSION: ${{ env.VERSION }}
         run: |
           go build -tags nosqlite -ldflags="-w -s -X github.com/GopeedLab/gopeed/pkg/base.Version=$VERSION" -buildmode=c-shared -o libgopeed.dylib github.com/GopeedLab/gopeed/bind/desktop
           go build -ldflags="-w -s" github.com/GopeedLab/gopeed/cmd/host
@@ -212,13 +199,14 @@ jobs:
             libgopeed.dylib
             host
             updater
+
   build-macos:
     if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'macos' }}
     runs-on: macos-latest
     strategy:
       matrix:
         channel: [arm64, amd64, universal]
-    needs: [get-release, build-macos-amd64-lib]
+    needs: [build-macos-amd64-lib]
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v4
@@ -273,7 +261,7 @@ jobs:
           lipo -create -output ui/flutter/assets/exec/updater ui/flutter/.temp/updater.arm64 ui/flutter/.temp/updater.amd64
       - name: Build
         env:
-          VERSION: ${{ needs.get-release.outputs.version }}
+          VERSION: ${{ env.VERSION }}
         run: |
           cd ui/flutter
           flutter build macos --dart-define="UPDATE_CHANNEL=macosDmg" --dart-define="GA4_MEASUREMENT_ID=${{ env.GA4_MEASUREMENT_ID }}" --dart-define="GA4_API_SECRET=${{ env.GA4_API_SECRET }}"
@@ -297,19 +285,18 @@ jobs:
           if [[ "${{ matrix.channel }}" == "amd64" ]]; then
             mv dist/Gopeed-v$VERSION-macos.dmg dist/Gopeed-v$VERSION-macos-amd64.dmg
           fi
-      - name: Upload
-        uses: shogo82148/actions-upload-release-asset@v1
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          upload_url: ${{ needs.get-release.outputs.upload_url }}
-          asset_path: ui/flutter/build/macos/Build/Products/Release/dist/*
-          overwrite: true
+          name: macos-${{ matrix.channel }}
+          path: ui/flutter/build/macos/Build/Products/Release/dist/*
+
   build-linux:
     if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'linux' }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-22.04, ubuntu-22.04-arm]
-    needs: [get-release]
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v4
@@ -328,7 +315,7 @@ jobs:
           sudo mv appimagetool /usr/local/bin/
       - name: Build
         env:
-          VERSION: ${{ needs.get-release.outputs.version }}
+          VERSION: ${{ env.VERSION }}
         run: |
           go build -tags nosqlite -ldflags="-w -s -X github.com/GopeedLab/gopeed/pkg/base.Version=$VERSION" -buildmode=c-shared -o ui/flutter/linux/bundle/lib/libgopeed.so github.com/GopeedLab/gopeed/bind/desktop
           go build -ldflags="-w -s" -o ui/flutter/assets/exec/host github.com/GopeedLab/gopeed/cmd/host
@@ -403,16 +390,15 @@ jobs:
           mv gopeed-*-linux.AppImage Gopeed-v${VERSION}-linux-${ARCH}.AppImage
           mv gopeed-*-linux.deb Gopeed-v${VERSION}-linux-${ARCH}.deb
           mv gopeed-*-linux.rpm Gopeed-v${VERSION}-linux-${ARCH}.rpm
-      - name: Upload
-        uses: shogo82148/actions-upload-release-asset@v1
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          upload_url: ${{ needs.get-release.outputs.upload_url }}
-          asset_path: ui/flutter/dist/*/*
-          overwrite: true
+          name: linux-${{ matrix.os }}
+          path: ui/flutter/dist/*/*
+
   build-snap:
     if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'snap' }}
     runs-on: ubuntu-latest
-    needs: [get-release]
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v4
@@ -424,7 +410,7 @@ jobs:
           channel: latest/stable
       - name: Build
         env:
-          VERSION: ${{ needs.get-release.outputs.version }}
+          VERSION: ${{ env.VERSION }}
         run: |
           go build -tags nosqlite -ldflags="-w -s -X github.com/GopeedLab/gopeed/pkg/base.Version=$VERSION" -buildmode=c-shared -o ui/flutter/linux/bundle/lib/libgopeed.so github.com/GopeedLab/gopeed/bind/desktop
           go build -ldflags="-w -s" -o ui/flutter/assets/exec/host github.com/GopeedLab/gopeed/cmd/host
@@ -539,14 +525,15 @@ jobs:
           sed -i 's/Icon=com.gopeed.Gopeed/Icon=\${SNAP}\/meta\/gui\/gopeed.svg/g' snap/gui/gopeed.desktop
 
           snapcraft --use-lxd
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: snap
+          path: ui/flutter/gopeed*.snap
 
-          # Snapcraft login
-          export SNAPCRAFT_STORE_CREDENTIALS=${{ secrets.SNAP_STORE_LOGIN }}
-          snapcraft upload --release=${{ github.event.inputs.test == 'true' && 'edge' || 'stable' }} gopeed_${VERSION}_amd64.snap
   build-android:
     if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'android' }}
     runs-on: ubuntu-latest
-    needs: [get-release]
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v4
@@ -561,7 +548,7 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
       - name: Build
         env:
-          VERSION: ${{ needs.get-release.outputs.version }}
+          VERSION: ${{ env.VERSION }}
           APK_KEYSTORE: ${{ secrets.APK_KEYSTORE }}
           APK_KEY_PASSWORD: ${{ secrets.APK_KEY_PASSWORD }}
           APK_STORE_PASSWORD: ${{ secrets.APK_STORE_PASSWORD }}
@@ -579,16 +566,15 @@ jobs:
           cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk dist/Gopeed-v$VERSION-android-armeabi-v7a.apk
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk dist/Gopeed-v$VERSION-android-arm64-v8a.apk
           cp build/app/outputs/flutter-apk/app-x86_64-release.apk dist/Gopeed-v$VERSION-android-x86_64.apk
-      - name: Upload
-        uses: shogo82148/actions-upload-release-asset@v1
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          upload_url: ${{ needs.get-release.outputs.upload_url }}
-          asset_path: ui/flutter/dist/*
-          overwrite: true
+          name: android
+          path: ui/flutter/dist/*
+
   build-ios:
     if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'ios' }}
     runs-on: macos-14
-    needs: [get-release]
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v4
@@ -599,7 +585,7 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
       - name: Build
         env:
-          VERSION: ${{ needs.get-release.outputs.version }}
+          VERSION: ${{ env.VERSION }}
         run: |
           go install golang.org/x/mobile/cmd/gomobile@latest
           go get golang.org/x/mobile/bind
@@ -612,16 +598,15 @@ jobs:
           zip -r -y Payload.zip Payload/Runner.app
           mkdir dist
           mv Payload.zip dist/Gopeed-v$VERSION-ios.ipa
-      - name: Upload
-        uses: shogo82148/actions-upload-release-asset@v1
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          upload_url: ${{ needs.get-release.outputs.upload_url }}
-          asset_path: ui/flutter/dist/*
-          overwrite: true
+          name: ios
+          path: ui/flutter/dist/*
+
   build-web:
     if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'web' || github.event.inputs.platform == 'qnap' }}
     runs-on: ubuntu-latest
-    needs: [get-release]
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v4
@@ -632,7 +617,7 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
       - name: Build
         env:
-          VERSION: ${{ needs.get-release.outputs.version }}
+          VERSION: ${{ env.VERSION }}
         run: |
           cd ui/flutter
           flutter build web --no-web-resources-cdn --dart-define="GA4_MEASUREMENT_ID=${{ env.GA4_MEASUREMENT_ID }}" --dart-define="GA4_API_SECRET=${{ env.GA4_API_SECRET }}"
@@ -665,17 +650,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: web-dist
-          path: dist/zip/
-      - name: Upload
-        uses: shogo82148/actions-upload-release-asset@v1
-        with:
-          upload_url: ${{ needs.get-release.outputs.upload_url }}
-          asset_path: dist/zip/*
-          overwrite: true
+          path: dist/zip/*
+
   build-qnap:
     if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'qnap' }}
     runs-on: ubuntu-latest
-    needs: [get-release, build-web]
+    needs: [build-web]
     steps:
       - uses: actions/setup-python@v5
         with:
@@ -686,7 +666,7 @@ jobs:
           path: dist/zip/
       - name: Build
         env:
-          VERSION: ${{ needs.get-release.outputs.version }}
+          VERSION: ${{ env.VERSION }}
         run: |
           sudo apt update -y
           sudo apt install -y pv bsdmainutils
@@ -721,16 +701,15 @@ jobs:
             dname=gopeed-v${VERSION}-${goos}-${goarch}.qpkg
             [[ -f build/${sname} ]] && cp -ra build/${sname} ../dist/qnap/${dname}
           done
-      - name: Upload
-        uses: shogo82148/actions-upload-release-asset@v1
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          upload_url: ${{ needs.get-release.outputs.upload_url }}
-          asset_path: dist/qnap/*
-          overwrite: true
+          name: qnap
+          path: dist/qnap/*
+
   build-docker:
     if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'docker' }}
     runs-on: ubuntu-latest
-    needs: [get-release]
     steps:
       - name: Remove unnecessary files
         run: |
@@ -744,11 +723,6 @@ jobs:
         uses: docker/setup-qemu-action@v2
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      - name: Login to DockerHub
-        uses: docker/login-action@v1
-        with:
-          username: liwei2633
-          password: ${{ secrets.DOCKER_PASSWORD }}
       - name: Build flutter web
         run: |
           cd ui/flutter
@@ -757,13 +731,13 @@ jobs:
           cd ../../
           rm -rf cmd/web/dist
           cp -r ui/flutter/build/web cmd/web/dist
-      - name: Build and push
+      - name: Build Docker image
         uses: docker/build-push-action@v2
         env:
-          VERSION: ${{ needs.get-release.outputs.version }}
+          VERSION: ${{ env.VERSION }}
         with:
           context: .
-          push: ${{ github.event.inputs.test == 'true' && 'false' || 'true' }}
+          push: false
           build-args: |
             VERSION=${{ env.VERSION }}
             IN_DOCKER=true
@@ -773,5 +747,14 @@ jobs:
             linux/arm64
             linux/arm/v7
           tags: |
-            liwei2633/gopeed:latest
-            liwei2633/gopeed:v${{ env.VERSION }}
+            gopeed:latest
+            gopeed:v${{ env.VERSION }}
+      - name: Save Docker image
+        run: |
+          mkdir -p dist/docker
+          docker save -o dist/docker/gopeed.tar gopeed:latest
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker
+          path: dist/docker/*
